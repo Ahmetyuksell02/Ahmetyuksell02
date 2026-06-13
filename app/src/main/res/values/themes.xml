@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme used as postSplashScreenTheme -->
+    <style name="Theme.AiAgentMobile" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash screen theme -->
+    <style name="Theme.AiAgentMobile.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.AiAgentMobile</item>
+    </style>
+</resources>

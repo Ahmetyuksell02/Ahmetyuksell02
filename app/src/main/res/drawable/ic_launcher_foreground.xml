@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Robot head body -->
+    <path
+        android:fillColor="#89F8D3"
+        android:pathData="M34,38 L34,72 Q34,76 38,76 L70,76 Q74,76 74,72 L74,38 Q74,34 70,34 L38,34 Q34,34 34,38 Z" />
+    <!-- Antenna stem -->
+    <path
+        android:fillColor="#89F8D3"
+        android:pathData="M51,34 L51,26 L57,26 L57,34 Z" />
+    <!-- Antenna tip -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <!-- Left eye -->
+    <path
+        android:fillColor="#006C51"
+        android:pathData="M44,50 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <!-- Right eye -->
+    <path
+        android:fillColor="#006C51"
+        android:pathData="M64,50 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <!-- Eye glow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,48 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,48 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <!-- Mouth bar -->
+    <path
+        android:fillColor="#006C51"
+        android:pathData="M43,63 L65,63 Q67,63 67,65 Q67,67 65,67 L43,67 Q41,67 41,65 Q41,63 43,63 Z" />
+</vector>
