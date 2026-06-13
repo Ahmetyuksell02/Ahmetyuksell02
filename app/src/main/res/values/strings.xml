@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AgentAI</string>
+    <string name="channel_streaming_name">Streaming</string>
+    <string name="channel_streaming_desc">Active AI response streams</string>
+    <string name="channel_agent_name">Agent Tasks</string>
+    <string name="channel_agent_desc">Background agent task execution</string>
+    <string name="channel_general_name">General</string>
+    <string name="channel_general_desc">General notifications</string>
+    <string name="notification_streaming_title">AI is responding…</string>
+    <string name="notification_streaming_text">Tap to return to chat</string>
+    <string name="notification_agent_running_title">Agent running</string>
+    <string name="notification_agent_done_title">Agent completed</string>
+    <string name="notification_cancel">Cancel</string>
+</resources>
