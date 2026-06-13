@@ -1,43 +1,55 @@
 package com.aiagent.mobile.feature.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +57,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aiagent.mobile.feature.chat.components.MessageActionSheet
+import com.aiagent.mobile.feature.chat.components.MessageBubble
+import com.aiagent.mobile.feature.chat.components.ModelSelectorSheet
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,161 +75,242 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var messageInput by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Scroll to bottom when new messages arrive
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.lastIndex)
+    var inputText by remember { mutableStateOf("") }
+    var showModelSelector by remember { mutableStateOf(false) }
+    var showSearchBar by remember { mutableStateOf(false) }
+    var selectedMessageId by remember { mutableStateOf<String?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            listState.layoutInfo.totalItemsCount > 0 &&
+                    listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index !=
+                    listState.layoutInfo.totalItemsCount - 1
         }
     }
 
-    // Show error in snackbar
+    LaunchedEffect(uiState.messages.size, uiState.isTyping) {
+        if (uiState.messages.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
     LaunchedEffect(uiState.error) {
-        uiState.error?.let { error ->
-            scope.launch {
-                snackbarHostState.showSnackbar(error)
-                viewModel.clearError()
-            }
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = uiState.conversationTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = uiState.modelName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            if (showSearchBar) {
+                SearchBar(
+                    query = uiState.searchQuery,
+                    resultCount = uiState.searchResultIds.size,
+                    onQueryChange = viewModel::searchMessages,
+                    onClose = {
+                        showSearchBar = false
+                        viewModel.clearSearch()
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
                 )
-            )
-        },
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Snackbar(
-                    action = {
-                        TextButton(onClick = { viewModel.retryLastMessage() }) {
-                            Text("Retry")
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = uiState.conversationTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                            TextButton(
+                                onClick = { showModelSelector = true },
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(
+                                    text = uiState.modelName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
-                    }
-                ) {
-                    Text(data.visuals.message)
-                }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showSearchBar = true }) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search")
+                        }
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Select Model") },
+                                onClick = { showMenu = false; showModelSelector = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Refresh Models") },
+                                onClick = { showMenu = false; viewModel.refreshModels() }
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
             }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                state = listState,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(uiState.messages, key = { it.id }) { message ->
-                    MessageBubble(message = message)
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    state = listState,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.messages, key = { it.id }) { message ->
+                        MessageBubble(
+                            message = message,
+                            isHighlighted = uiState.searchResultIds.contains(message.id),
+                            onLongClick = { selectedMessageId = message.id }
+                        )
+                    }
                 }
 
-                if (uiState.isTyping) {
-                    item { TypingIndicator() }
+                if (uiState.editingMessageId != null) {
+                    EditBar(
+                        content = uiState.editingContent,
+                        onContentChange = viewModel::updateEditContent,
+                        onSubmit = viewModel::submitEdit,
+                        onCancel = viewModel::cancelEdit
+                    )
+                } else {
+                    InputBar(
+                        text = inputText,
+                        onTextChange = { inputText = it },
+                        isTyping = uiState.isTyping,
+                        onSend = {
+                            if (inputText.isNotBlank()) {
+                                viewModel.sendMessage(inputText)
+                                inputText = ""
+                            }
+                        },
+                        onAttach = viewModel::onAttachFile,
+                        onVoice = viewModel::onVoiceInput
+                    )
                 }
             }
 
-            HorizontalDivider()
-
-            MessageInputBar(
-                value = messageInput,
-                onValueChange = { messageInput = it },
-                onSend = {
-                    viewModel.sendMessage(messageInput)
-                    messageInput = ""
-                },
-                onAttach = viewModel::onAttachFile,
-                onVoice = viewModel::onVoiceInput,
-                isLoading = uiState.isLoading
-            )
-        }
-    }
-}
-
-@Composable
-private fun MessageBubble(message: MessageUiModel) {
-    val bubbleShape = if (message.isFromUser) {
-        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.isFromUser) Arrangement.End else Arrangement.Start
-    ) {
-        Surface(
-            shape = bubbleShape,
-            color = if (message.isFromUser) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-            modifier = Modifier.widthIn(max = 300.dp)
-        ) {
-            Text(
-                text = message.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (message.isFromUser) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun TypingIndicator() {
-    Row(horizontalArrangement = Arrangement.Start, modifier = Modifier.fillMaxWidth()) {
-        Surface(
-            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            AnimatedVisibility(
+                visible = showScrollToBottom,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 80.dp)
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(10.dp), strokeWidth = 2.dp)
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            if (uiState.messages.isNotEmpty()) {
+                                listState.animateScrollToItem(uiState.messages.size - 1)
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Icon(
+                        Icons.Filled.ExpandMore,
+                        contentDescription = "Scroll to bottom",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showModelSelector) {
+        ModelSelectorSheet(
+            models = uiState.availableModels,
+            selectedModelId = uiState.modelId,
+            isLoading = uiState.isLoadingModels,
+            onModelSelected = { model ->
+                viewModel.selectModel(model.id, model.name)
+                showModelSelector = false
+            },
+            onDismiss = { showModelSelector = false }
+        )
+    }
+
+    selectedMessageId?.let { msgId ->
+        val message = uiState.messages.find { it.id == msgId }
+        message?.let {
+            MessageActionSheet(
+                message = it,
+                onDismiss = { selectedMessageId = null },
+                onDelete = { viewModel.deleteMessage(msgId) },
+                onEdit = { viewModel.startEditMessage(msgId) },
+                onRetry = { viewModel.retryLastMessage() }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchBar(
+    query: String,
+    resultCount: Int,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = "Close search")
+            }
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = { Text("Search messages…") },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            if (query.isNotBlank()) {
                 Text(
-                    text = "Thinking…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "$resultCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 12.dp)
                 )
             }
         }
@@ -221,52 +318,108 @@ private fun TypingIndicator() {
 }
 
 @Composable
-private fun MessageInputBar(
-    value: String,
-    onValueChange: (String) -> Unit,
+private fun InputBar(
+    text: String,
+    onTextChange: (String) -> Unit,
+    isTyping: Boolean,
     onSend: () -> Unit,
     onAttach: () -> Unit,
-    onVoice: () -> Unit,
-    isLoading: Boolean
+    onVoice: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp
     ) {
-        IconButton(onClick = onAttach) {
-            Icon(
-                imageVector = Icons.Filled.AttachFile,
-                contentDescription = "Attach file",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text("Message…") },
-            modifier = Modifier.weight(1f),
-            maxLines = 6,
-            shape = MaterialTheme.shapes.extraLarge
-        )
-
-        if (value.isBlank()) {
-            IconButton(onClick = onVoice) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            IconButton(onClick = onAttach) {
                 Icon(
-                    imageVector = Icons.Filled.Mic,
-                    contentDescription = "Voice input",
+                    Icons.Filled.AttachFile,
+                    contentDescription = "Attach",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        } else {
-            FilledIconButton(onClick = onSend, enabled = !isLoading) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send"
-                )
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                placeholder = { Text("Message…") },
+                modifier = Modifier.weight(1f),
+                shape = MaterialTheme.shapes.extraLarge,
+                minLines = 1,
+                maxLines = 5
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            if (text.isBlank()) {
+                IconButton(onClick = onVoice) {
+                    Icon(
+                        Icons.Filled.Mic,
+                        contentDescription = "Voice input",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onSend,
+                    enabled = !isTyping
+                ) {
+                    if (isTyping) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    } else {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditBar(
+    content: String,
+    onContentChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        tonalElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(12.dp)
+        ) {
+            Text(
+                text = "Edit message",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            OutlinedTextField(
+                value = content,
+                onValueChange = onContentChange,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 1,
+                maxLines = 6
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onCancel) { Text("Cancel") }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(onClick = onSubmit) { Text("Save") }
             }
         }
     }

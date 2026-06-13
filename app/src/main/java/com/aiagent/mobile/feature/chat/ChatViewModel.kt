@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiagent.mobile.core.common.Constants
+import com.aiagent.mobile.core.domain.model.AIModel
 import com.aiagent.mobile.core.domain.model.Message
 import com.aiagent.mobile.core.domain.model.MessageRole
 import com.aiagent.mobile.core.domain.model.StreamEvent
@@ -41,7 +42,13 @@ data class ChatUiState(
     val isLoading: Boolean = false,
     val isTyping: Boolean = false,
     val streamingMessageId: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val availableModels: List<AIModel> = emptyList(),
+    val isLoadingModels: Boolean = false,
+    val searchQuery: String = "",
+    val searchResultIds: Set<String> = emptySet(),
+    val editingMessageId: String? = null,
+    val editingContent: String = ""
 )
 
 @HiltViewModel
@@ -69,6 +76,7 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadDefaultModel()
+        loadModels()
         if (navConversationId != Constants.NEW_CONVERSATION_ID) {
             loadConversation(navConversationId)
             observeMessages(navConversationId)
@@ -239,11 +247,38 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private fun loadModels() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingModels = true) }
+            when (val result = getModelsUseCase()) {
+                is com.aiagent.mobile.core.common.Resource.Success ->
+                    _uiState.update { it.copy(availableModels = result.data, isLoadingModels = false) }
+                else ->
+                    _uiState.update { it.copy(isLoadingModels = false) }
+            }
+        }
+    }
+
+    fun refreshModels() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingModels = true) }
+            when (val result = getModelsUseCase(forceRefresh = true)) {
+                is com.aiagent.mobile.core.common.Resource.Success ->
+                    _uiState.update { it.copy(availableModels = result.data, isLoadingModels = false) }
+                else ->
+                    _uiState.update { it.copy(isLoadingModels = false) }
+            }
+        }
+    }
+
     fun selectModel(modelId: String, modelName: String) {
         _uiState.update { it.copy(modelId = modelId, modelName = modelName) }
     }
 
     fun deleteMessage(messageId: String) {
+        viewModelScope.launch {
+            messageRepository.delete(messageId)
+        }
         _uiState.update { state ->
             state.copy(messages = state.messages.filter { it.id != messageId })
         }
@@ -252,6 +287,53 @@ class ChatViewModel @Inject constructor(
     fun retryLastMessage() {
         val lastUserMessage = _uiState.value.messages.lastOrNull { it.isFromUser }
         lastUserMessage?.let { sendMessage(it.content) }
+    }
+
+    fun searchMessages(query: String) {
+        val q = query.trim()
+        _uiState.update { state ->
+            val ids = if (q.isBlank()) emptySet()
+            else state.messages
+                .filter { it.content.contains(q, ignoreCase = true) }
+                .map { it.id }
+                .toSet()
+            state.copy(searchQuery = q, searchResultIds = ids)
+        }
+    }
+
+    fun clearSearch() {
+        _uiState.update { it.copy(searchQuery = "", searchResultIds = emptySet()) }
+    }
+
+    fun startEditMessage(messageId: String) {
+        val message = _uiState.value.messages.find { it.id == messageId } ?: return
+        _uiState.update { it.copy(editingMessageId = messageId, editingContent = message.content) }
+    }
+
+    fun updateEditContent(content: String) {
+        _uiState.update { it.copy(editingContent = content) }
+    }
+
+    fun submitEdit() {
+        val state = _uiState.value
+        val id = state.editingMessageId ?: return
+        val newContent = state.editingContent.trim()
+        if (newContent.isBlank()) return
+        viewModelScope.launch {
+            val original = messageRepository.getById(id) ?: return@launch
+            messageRepository.update(original.copy(content = newContent))
+        }
+        _uiState.update { s ->
+            s.copy(
+                messages = s.messages.map { if (it.id == id) it.copy(content = newContent) else it },
+                editingMessageId = null,
+                editingContent = ""
+            )
+        }
+    }
+
+    fun cancelEdit() {
+        _uiState.update { it.copy(editingMessageId = null, editingContent = "") }
     }
 
     fun onAttachFile() {
