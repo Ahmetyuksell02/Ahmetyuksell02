@@ -2,20 +2,21 @@ package com.aiagent.mobile.feature.agents
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.domain.model.AgentTask
+import com.aiagent.mobile.core.domain.model.AgentTaskStatus
+import com.aiagent.mobile.core.domain.model.AgentTaskType
+import com.aiagent.mobile.core.domain.repository.IAgentTaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
-
-enum class AgentTaskStatus { PENDING, RUNNING, COMPLETED, FAILED, PAUSED }
-
-enum class AgentTaskType {
-    NEWS_SUMMARY, PRICE_MONITOR, JOB_MONITOR,
-    FILE_ANALYSIS, RESEARCH, WEB_INVESTIGATION, CUSTOM
-}
 
 data class AgentTaskUiModel(
     val id: String,
@@ -36,44 +37,75 @@ data class AgentsUiState(
 )
 
 @HiltViewModel
-class AgentsViewModel @Inject constructor() : ViewModel() {
+class AgentsViewModel @Inject constructor(
+    private val agentTaskRepository: IAgentTaskRepository
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AgentsUiState())
+    private val _uiState = MutableStateFlow(AgentsUiState(isLoading = true))
     val uiState: StateFlow<AgentsUiState> = _uiState.asStateFlow()
 
     init {
-        loadTasks()
+        observeTasks()
     }
 
-    private fun loadTasks() {
+    private fun observeTasks() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            // WorkManager + Room query wired in Phase 4
-            _uiState.update { it.copy(isLoading = false) }
+            agentTaskRepository.getAll()
+                .catch { e -> _uiState.update { it.copy(isLoading = false, error = e.message) } }
+                .collect { tasks ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            tasks = tasks.map { t -> t.toUiModel() }
+                        )
+                    }
+                }
         }
     }
 
     fun pauseTask(taskId: String) {
         viewModelScope.launch {
-            // Phase 4
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PAUSED)
+            // WorkManager cancellation wired in Phase 4
         }
     }
 
     fun resumeTask(taskId: String) {
         viewModelScope.launch {
-            // Phase 4
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
+            // WorkManager re-enqueue wired in Phase 4
         }
     }
 
     fun cancelTask(taskId: String) {
         viewModelScope.launch {
-            // Phase 4
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.FAILED, "Cancelled by user")
+            // WorkManager cancellation wired in Phase 4
         }
     }
 
     fun retryTask(taskId: String) {
         viewModelScope.launch {
-            // Phase 4
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
         }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    private fun AgentTask.toUiModel(): AgentTaskUiModel {
+        val fmt = SimpleDateFormat("MMM dd HH:mm", Locale.getDefault())
+        return AgentTaskUiModel(
+            id = id,
+            title = title,
+            description = description,
+            type = taskType,
+            status = status,
+            progress = progress,
+            nextRunFormatted = nextRunAt?.let { fmt.format(Date(it)) },
+            lastRunFormatted = lastRunAt?.let { fmt.format(Date(it)) },
+            resultSummary = result?.take(120)
+        )
     }
 }

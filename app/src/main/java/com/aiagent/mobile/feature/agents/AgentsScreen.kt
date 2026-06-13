@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -216,7 +217,7 @@ private fun AgentTaskCard(
 }
 
 @Composable
-private fun StatusIcon(status: AgentTaskStatus) {
+internal fun StatusIcon(status: AgentTaskStatus) {
     val (icon, tint) = when (status) {
         AgentTaskStatus.RUNNING -> Icons.Filled.PlayArrow to MaterialTheme.colorScheme.primary
         AgentTaskStatus.COMPLETED -> Icons.Filled.CheckCircle to Color(0xFF4CAF50)

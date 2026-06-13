@@ -39,12 +39,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.domain.model.AgentTask
+import com.aiagent.mobile.core.domain.model.AgentTaskStatus
+import com.aiagent.mobile.core.domain.model.AgentTaskType
+import com.aiagent.mobile.core.domain.repository.IAgentTaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 data class CreateAgentUiState(
@@ -60,7 +65,9 @@ data class CreateAgentUiState(
 )
 
 @HiltViewModel
-class CreateAgentViewModel @Inject constructor() : ViewModel() {
+class CreateAgentViewModel @Inject constructor(
+    private val agentTaskRepository: IAgentTaskRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreateAgentUiState())
     val uiState: StateFlow<CreateAgentUiState> = _uiState.asStateFlow()
@@ -101,7 +108,21 @@ class CreateAgentViewModel @Inject constructor() : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
-            // WorkManager scheduling + Room persistence wired in Phase 4
+            val now = System.currentTimeMillis()
+            val task = AgentTask(
+                id = UUID.randomUUID().toString(),
+                title = state.title.trim(),
+                description = state.prompt.take(200).trim(),
+                prompt = state.prompt.trim(),
+                taskType = state.taskType,
+                status = AgentTaskStatus.PENDING,
+                isPeriodic = state.isPeriodic,
+                intervalMinutes = (state.intervalHours.toLongOrNull() ?: 24L) * 60L,
+                createdAt = now,
+                updatedAt = now
+            )
+            agentTaskRepository.insert(task)
+            // WorkManager scheduling wired in Phase 4
             _uiState.update { it.copy(isSaving = false) }
             onSuccess()
         }

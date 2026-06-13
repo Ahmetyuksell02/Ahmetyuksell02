@@ -42,6 +42,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.domain.model.AgentTaskStatus
+import com.aiagent.mobile.core.domain.repository.IAgentTaskRepository
 import com.aiagent.mobile.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +61,8 @@ data class AgentDetailUiState(
 
 @HiltViewModel
 class AgentDetailViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val agentTaskRepository: IAgentTaskRepository
 ) : ViewModel() {
 
     private val taskId: String = savedStateHandle.get<String>(Screen.AgentDetail.ARG_TASK_ID) ?: ""
@@ -68,19 +71,50 @@ class AgentDetailViewModel @Inject constructor(
     val uiState: StateFlow<AgentDetailUiState> = _uiState.asStateFlow()
 
     init {
-        loadTaskDetail()
+        observeTask()
     }
 
-    private fun loadTaskDetail() {
+    private fun observeTask() {
         viewModelScope.launch {
-            // Room + WorkManager wired in Phase 4
-            _uiState.update { it.copy(isLoading = false) }
+            agentTaskRepository.getById(taskId)
+                .collect { task ->
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            task = task?.let { t ->
+                                AgentTaskUiModel(
+                                    id = t.id,
+                                    title = t.title,
+                                    description = t.description,
+                                    type = t.taskType,
+                                    status = t.status,
+                                    progress = t.progress,
+                                    resultSummary = t.result?.take(300)
+                                )
+                            }
+                        )
+                    }
+                }
         }
     }
 
-    fun pauseTask() { viewModelScope.launch { /* Phase 4 */ } }
-    fun resumeTask() { viewModelScope.launch { /* Phase 4 */ } }
-    fun cancelTask() { viewModelScope.launch { /* Phase 4 */ } }
+    fun pauseTask() {
+        viewModelScope.launch {
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PAUSED)
+        }
+    }
+
+    fun resumeTask() {
+        viewModelScope.launch {
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
+        }
+    }
+
+    fun cancelTask() {
+        viewModelScope.launch {
+            agentTaskRepository.updateStatus(taskId, AgentTaskStatus.FAILED, "Cancelled by user")
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
