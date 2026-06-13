@@ -4,6 +4,7 @@ import com.aiagent.mobile.core.data.local.entity.AgentTaskEntity
 import com.aiagent.mobile.core.domain.model.AgentTask
 import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 import com.aiagent.mobile.core.domain.model.AgentTaskType
+import com.aiagent.mobile.core.domain.model.TriggerType
 
 fun AgentTaskEntity.toDomain() = AgentTask(
     id = id,
@@ -21,6 +22,9 @@ fun AgentTaskEntity.toDomain() = AgentTask(
     result = result,
     error = error,
     workerId = workerId,
+    retryCount = retryCount,
+    maxRetries = maxRetries,
+    triggerType = runCatching { TriggerType.valueOf(triggerType) }.getOrDefault(TriggerType.MANUAL),
     createdAt = createdAt,
     updatedAt = updatedAt
 )
@@ -41,6 +45,9 @@ fun AgentTask.toEntity() = AgentTaskEntity(
     result = result,
     error = error,
     workerId = workerId,
+    retryCount = retryCount,
+    maxRetries = maxRetries,
+    triggerType = triggerType.name,
     createdAt = createdAt,
     updatedAt = updatedAt
 )

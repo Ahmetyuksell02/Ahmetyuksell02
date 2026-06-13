@@ -25,27 +25,39 @@ class AgentTaskRepositoryImpl @Inject constructor(
     override fun getByStatus(status: AgentTaskStatus): Flow<List<AgentTask>> =
         dao.getByStatus(status.name).map { list -> list.map { it.toDomain() } }
 
+    override fun getByStatuses(statuses: List<AgentTaskStatus>): Flow<List<AgentTask>> =
+        dao.getByStatuses(statuses.map { it.name }).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getByIdOnce(id: String): AgentTask? =
+        dao.getByIdOnce(id)?.toDomain()
+
+    override suspend fun getByStatusesOnce(statuses: List<AgentTaskStatus>): List<AgentTask> =
+        dao.getByStatusesOnce(statuses.map { it.name }).map { it.toDomain() }
+
     override suspend fun insert(task: AgentTask) = dao.insert(task.toEntity())
 
     override suspend fun update(task: AgentTask) = dao.update(task.toEntity())
 
     override suspend fun delete(taskId: String) = dao.delete(taskId)
 
-    override suspend fun updateStatus(
-        taskId: String,
-        status: AgentTaskStatus,
-        error: String?
-    ) = dao.updateStatus(taskId, status.name, error, System.currentTimeMillis())
+    override suspend fun updateStatus(taskId: String, status: AgentTaskStatus, error: String?) =
+        dao.updateStatus(taskId, status.name, error, System.currentTimeMillis())
 
     override suspend fun updateProgress(taskId: String, progress: Float) =
         dao.updateProgress(taskId, progress, System.currentTimeMillis())
 
-    override suspend fun updateResult(
-        taskId: String,
-        result: String,
-        status: AgentTaskStatus
-    ) = dao.updateResult(taskId, result, status.name, System.currentTimeMillis())
+    override suspend fun updateResult(taskId: String, result: String, status: AgentTaskStatus) =
+        dao.updateResult(taskId, result, status.name, System.currentTimeMillis())
 
     override suspend fun updateWorkerId(taskId: String, workerId: String) =
         dao.updateWorkerId(taskId, workerId)
+
+    override suspend fun updateRetryCount(taskId: String, count: Int) =
+        dao.updateRetryCount(taskId, count, System.currentTimeMillis())
+
+    override suspend fun updateLastRunAt(taskId: String, timestamp: Long) =
+        dao.updateLastRunAt(taskId, timestamp, System.currentTimeMillis())
+
+    override suspend fun updateNextRunAt(taskId: String, timestamp: Long) =
+        dao.updateNextRunAt(taskId, timestamp, System.currentTimeMillis())
 }

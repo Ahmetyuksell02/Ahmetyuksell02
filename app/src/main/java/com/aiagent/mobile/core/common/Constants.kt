@@ -9,13 +9,25 @@ object Constants {
 
     // ─── Room Database ────────────────────────────────────────────────────────
     const val DATABASE_NAME = "ai_agent_db"
-    const val DATABASE_VERSION = 1
+    const val DATABASE_VERSION = 2
 
     // ─── WorkManager Tags ─────────────────────────────────────────────────────
     const val AGENT_TASK_WORKER_TAG = "agent_task_worker"
+    const val RESCHEDULE_WORKER_TAG = "reschedule_agents_worker"
     const val DAILY_SUMMARY_WORKER_TAG = "daily_summary_worker"
     const val PERIODIC_MONITOR_WORKER_TAG = "periodic_monitor_worker"
     const val KEY_TASK_ID = "task_id"
+    const val KEY_PROGRESS = "progress"
+    const val KEY_PROGRESS_MESSAGE = "progress_message"
+    const val KEY_ERROR = "error_message"
+
+    // ─── Agent Execution ──────────────────────────────────────────────────────
+    const val MAX_AGENT_EXECUTION_MS = 8L * 60L * 1000L  // 8 minutes (WorkManager cap is ~10)
+    const val MIN_PERIODIC_INTERVAL_MINUTES = 15L
+    const val AGENT_BACKOFF_DELAY_SECONDS = 30L
+    const val AGENT_DEFAULT_MAX_RETRIES = 3
+    const val AGENT_MAX_TOKENS = 2048
+    const val AGENT_RATE_LIMIT_MS = 5L * 60L * 1000L   // 5 minutes between same-task runs
 
     // ─── DataStore ────────────────────────────────────────────────────────────
     const val USER_PREFERENCES_NAME = "user_preferences"

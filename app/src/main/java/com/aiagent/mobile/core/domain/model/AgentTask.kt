@@ -16,6 +16,9 @@ data class AgentTask(
     val result: String? = null,
     val error: String? = null,
     val workerId: String? = null,
+    val retryCount: Int = 0,
+    val maxRetries: Int = 3,
+    val triggerType: TriggerType = TriggerType.MANUAL,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -25,4 +28,10 @@ enum class AgentTaskType {
     FILE_ANALYSIS, RESEARCH, WEB_INVESTIGATION, CUSTOM
 }
 
-enum class AgentTaskStatus { PENDING, RUNNING, COMPLETED, FAILED, PAUSED }
+enum class AgentTaskStatus {
+    PENDING, SCHEDULED, RUNNING, PAUSED, COMPLETED, FAILED, RETRYING
+}
+
+enum class TriggerType {
+    MANUAL, TIME_BASED, EVENT_BASED, CONDITION_BASED
+}

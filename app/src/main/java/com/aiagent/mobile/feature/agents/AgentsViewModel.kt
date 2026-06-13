@@ -2,6 +2,9 @@ package com.aiagent.mobile.feature.agents
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.data.scheduler.AgentScheduler
+import com.aiagent.mobile.core.domain.agent.AgentEvent
+import com.aiagent.mobile.core.domain.agent.AgentEventBus
 import com.aiagent.mobile.core.domain.model.AgentTask
 import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 import com.aiagent.mobile.core.domain.model.AgentTaskType
@@ -27,18 +30,23 @@ data class AgentTaskUiModel(
     val progress: Float = 0f,
     val nextRunFormatted: String? = null,
     val lastRunFormatted: String? = null,
-    val resultSummary: String? = null
+    val resultSummary: String? = null,
+    val retryCount: Int = 0,
+    val maxRetries: Int = 3
 )
 
 data class AgentsUiState(
     val tasks: List<AgentTaskUiModel> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val lastEvent: String? = null
 )
 
 @HiltViewModel
 class AgentsViewModel @Inject constructor(
-    private val agentTaskRepository: IAgentTaskRepository
+    private val agentTaskRepository: IAgentTaskRepository,
+    private val agentScheduler: AgentScheduler,
+    private val agentEventBus: AgentEventBus
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AgentsUiState(isLoading = true))
@@ -46,6 +54,7 @@ class AgentsViewModel @Inject constructor(
 
     init {
         observeTasks()
+        observeAgentEvents()
     }
 
     private fun observeTasks() {
@@ -63,31 +72,64 @@ class AgentsViewModel @Inject constructor(
         }
     }
 
+    private fun observeAgentEvents() {
+        viewModelScope.launch {
+            agentEventBus.events.collect { event ->
+                val message = when (event) {
+                    is AgentEvent.Started -> "Agent \"${event.title}\" started"
+                    is AgentEvent.Progress -> null // Room update handles the UI; no toast needed
+                    is AgentEvent.Completed -> "Agent completed successfully"
+                    is AgentEvent.Failed -> "Agent failed: ${event.error.take(60)}"
+                    is AgentEvent.Retrying -> "Agent retrying (${event.attempt}/${event.maxAttempts})"
+                    is AgentEvent.Paused -> "Agent paused"
+                }
+                if (message != null) {
+                    _uiState.update { it.copy(lastEvent = message) }
+                }
+            }
+        }
+    }
+
     fun pauseTask(taskId: String) {
         viewModelScope.launch {
+            agentScheduler.cancel(taskId)
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PAUSED)
-            // WorkManager cancellation wired in Phase 4
         }
     }
 
     fun resumeTask(taskId: String) {
         viewModelScope.launch {
+            val task = agentTaskRepository.getByIdOnce(taskId) ?: return@launch
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
-            // WorkManager re-enqueue wired in Phase 4
+            agentScheduler.schedule(task)
         }
     }
 
     fun cancelTask(taskId: String) {
         viewModelScope.launch {
+            agentScheduler.cancel(taskId)
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.FAILED, "Cancelled by user")
-            // WorkManager cancellation wired in Phase 4
         }
     }
 
     fun retryTask(taskId: String) {
         viewModelScope.launch {
+            val task = agentTaskRepository.getByIdOnce(taskId) ?: return@launch
+            agentTaskRepository.updateRetryCount(taskId, 0)
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
+            agentScheduler.schedule(task)
         }
+    }
+
+    fun deleteTask(taskId: String) {
+        viewModelScope.launch {
+            agentScheduler.cancel(taskId)
+            agentTaskRepository.delete(taskId)
+        }
+    }
+
+    fun clearLastEvent() {
+        _uiState.update { it.copy(lastEvent = null) }
     }
 
     fun clearError() {
@@ -105,7 +147,9 @@ class AgentsViewModel @Inject constructor(
             progress = progress,
             nextRunFormatted = nextRunAt?.let { fmt.format(Date(it)) },
             lastRunFormatted = lastRunAt?.let { fmt.format(Date(it)) },
-            resultSummary = result?.take(120)
+            resultSummary = result?.take(120),
+            retryCount = retryCount,
+            maxRetries = maxRetries
         )
     }
 }

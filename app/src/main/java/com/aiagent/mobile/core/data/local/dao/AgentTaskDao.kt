@@ -17,8 +17,17 @@ interface AgentTaskDao {
     @Query("SELECT * FROM agent_tasks WHERE id = :id")
     fun getById(id: String): Flow<AgentTaskEntity?>
 
+    @Query("SELECT * FROM agent_tasks WHERE id = :id LIMIT 1")
+    suspend fun getByIdOnce(id: String): AgentTaskEntity?
+
     @Query("SELECT * FROM agent_tasks WHERE status = :status")
     fun getByStatus(status: String): Flow<List<AgentTaskEntity>>
+
+    @Query("SELECT * FROM agent_tasks WHERE status IN (:statuses)")
+    fun getByStatuses(statuses: List<String>): Flow<List<AgentTaskEntity>>
+
+    @Query("SELECT * FROM agent_tasks WHERE status IN (:statuses)")
+    suspend fun getByStatusesOnce(statuses: List<String>): List<AgentTaskEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: AgentTaskEntity)
@@ -41,6 +50,12 @@ interface AgentTaskDao {
     @Query("UPDATE agent_tasks SET workerId = :workerId WHERE id = :id")
     suspend fun updateWorkerId(id: String, workerId: String)
 
+    @Query("UPDATE agent_tasks SET retryCount = :retryCount, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateRetryCount(id: String, retryCount: Int, updatedAt: Long)
+
+    @Query("UPDATE agent_tasks SET lastRunAt = :lastRunAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateLastRunAt(id: String, lastRunAt: Long, updatedAt: Long)
+
     @Query("UPDATE agent_tasks SET nextRunAt = :nextRunAt, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateNextRun(id: String, nextRunAt: Long, updatedAt: Long)
+    suspend fun updateNextRunAt(id: String, nextRunAt: Long, updatedAt: Long)
 }

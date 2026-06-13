@@ -42,6 +42,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.data.scheduler.AgentScheduler
 import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 import com.aiagent.mobile.core.domain.repository.IAgentTaskRepository
 import com.aiagent.mobile.navigation.Screen
@@ -62,7 +63,8 @@ data class AgentDetailUiState(
 @HiltViewModel
 class AgentDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val agentTaskRepository: IAgentTaskRepository
+    private val agentTaskRepository: IAgentTaskRepository,
+    private val agentScheduler: AgentScheduler
 ) : ViewModel() {
 
     private val taskId: String = savedStateHandle.get<String>(Screen.AgentDetail.ARG_TASK_ID) ?: ""
@@ -100,18 +102,22 @@ class AgentDetailViewModel @Inject constructor(
 
     fun pauseTask() {
         viewModelScope.launch {
+            agentScheduler.cancel(taskId)
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PAUSED)
         }
     }
 
     fun resumeTask() {
         viewModelScope.launch {
+            val task = agentTaskRepository.getByIdOnce(taskId) ?: return@launch
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.PENDING)
+            agentScheduler.schedule(task)
         }
     }
 
     fun cancelTask() {
         viewModelScope.launch {
+            agentScheduler.cancel(taskId)
             agentTaskRepository.updateStatus(taskId, AgentTaskStatus.FAILED, "Cancelled by user")
         }
     }

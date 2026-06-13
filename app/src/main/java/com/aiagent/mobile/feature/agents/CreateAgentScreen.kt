@@ -39,9 +39,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.aiagent.mobile.core.data.scheduler.AgentScheduler
 import com.aiagent.mobile.core.domain.model.AgentTask
 import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 import com.aiagent.mobile.core.domain.model.AgentTaskType
+import com.aiagent.mobile.core.domain.model.TriggerType
 import com.aiagent.mobile.core.domain.repository.IAgentTaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,7 +68,8 @@ data class CreateAgentUiState(
 
 @HiltViewModel
 class CreateAgentViewModel @Inject constructor(
-    private val agentTaskRepository: IAgentTaskRepository
+    private val agentTaskRepository: IAgentTaskRepository,
+    private val agentScheduler: AgentScheduler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreateAgentUiState())
@@ -118,11 +121,12 @@ class CreateAgentViewModel @Inject constructor(
                 status = AgentTaskStatus.PENDING,
                 isPeriodic = state.isPeriodic,
                 intervalMinutes = (state.intervalHours.toLongOrNull() ?: 24L) * 60L,
+                triggerType = TriggerType.MANUAL,
                 createdAt = now,
                 updatedAt = now
             )
             agentTaskRepository.insert(task)
-            // WorkManager scheduling wired in Phase 4
+            agentScheduler.schedule(task)
             _uiState.update { it.copy(isSaving = false) }
             onSuccess()
         }
