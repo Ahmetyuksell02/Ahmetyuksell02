@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android Studio
+*.iml
+.idea/
+*.DS_Store
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keys / secrets
+*.jks
+*.keystore
+*.p12
+
+# Navigation Safe Args generated
+app/src/main/java/**/NavArgs*.kt
