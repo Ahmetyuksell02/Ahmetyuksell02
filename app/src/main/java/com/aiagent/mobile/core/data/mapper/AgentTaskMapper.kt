@@ -1,6 +1,7 @@
 package com.aiagent.mobile.core.data.mapper
 
 import com.aiagent.mobile.core.data.local.entity.AgentTaskEntity
+import com.aiagent.mobile.core.domain.agent.AgentPriority
 import com.aiagent.mobile.core.domain.model.AgentTask
 import com.aiagent.mobile.core.domain.model.AgentTaskStatus
 import com.aiagent.mobile.core.domain.model.AgentTaskType
@@ -25,6 +26,7 @@ fun AgentTaskEntity.toDomain() = AgentTask(
     retryCount = retryCount,
     maxRetries = maxRetries,
     triggerType = runCatching { TriggerType.valueOf(triggerType) }.getOrDefault(TriggerType.MANUAL),
+    priority = runCatching { AgentPriority.valueOf(priority) }.getOrDefault(AgentPriority.NORMAL),
     createdAt = createdAt,
     updatedAt = updatedAt
 )
@@ -48,6 +50,7 @@ fun AgentTask.toEntity() = AgentTaskEntity(
     retryCount = retryCount,
     maxRetries = maxRetries,
     triggerType = triggerType.name,
+    priority = priority.name,
     createdAt = createdAt,
     updatedAt = updatedAt
 )

@@ -5,9 +5,12 @@ import com.aiagent.mobile.core.data.remote.api.OpenRouterApi
 import com.aiagent.mobile.core.data.remote.dto.ChatMessageDto
 import com.aiagent.mobile.core.data.remote.dto.ChatRequestDto
 import com.aiagent.mobile.core.domain.agent.AgentExecutionResult
+import com.aiagent.mobile.core.domain.agent.AgentSystemPrompts
 import com.aiagent.mobile.core.domain.agent.BaseAgentExecutor
 import com.aiagent.mobile.core.domain.model.AgentTask
 import com.aiagent.mobile.core.domain.model.AgentTaskType
+import com.aiagent.mobile.core.domain.tool.ToolResult
+import com.aiagent.mobile.core.domain.tool.toContextBlock
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,28 +24,30 @@ class FinanceAgentExecutor @Inject constructor(
 
     override suspend fun execute(
         task: AgentTask,
+        toolContexts: List<ToolResult>,
         onProgress: suspend (Float, String) -> Unit
     ): AgentExecutionResult {
         return try {
-            onProgress(0.05f, "Analyzing financial context…")
+            val toolContext = toolContexts.toContextBlock()
+            val systemPrompt = AgentSystemPrompts.financialAnalyst(toolContext)
 
-            // Step 1: Parse and contextualize the monitoring request
+            onProgress(0.1f, "Analysing live market data…")
+
+            // Step 1: Contextualise the monitoring request against live data
             val contextResponse = api.chatCompletion(
                 ChatRequestDto(
                     model = Constants.DEFAULT_MODEL_ID,
                     messages = listOf(
-                        ChatMessageDto(
-                            role = "system",
-                            content = "You are a professional financial analyst with deep market knowledge. " +
-                                "Provide structured, data-driven analysis. Note: you don't have real-time data, " +
-                                "but can provide expert analysis and context based on your training knowledge."
-                        ),
+                        ChatMessageDto(role = "system", content = systemPrompt),
                         ChatMessageDto(
                             role = "user",
-                            content = "Analyze this financial monitoring request and provide current market context: " +
-                                "\"${task.prompt}\"\n\n" +
-                                "Include: 1) Current market context, 2) Key price levels or thresholds to watch, " +
-                                "3) Recent trend analysis, 4) Key factors affecting this asset/topic."
+                            content = "Using ONLY the live market data provided in your system prompt, " +
+                                "analyse this financial monitoring request: \"${task.prompt}\"\n\n" +
+                                "Provide: 1) Current price/rate levels from the data, " +
+                                "2) Key thresholds to watch, " +
+                                "3) Trend direction based on the data, " +
+                                "4) Any notable anomalies in the data. " +
+                                "Label each point as DATA: or ANALYSIS: as instructed."
                         )
                     ),
                     maxTokens = Constants.AGENT_MAX_TOKENS
@@ -52,24 +57,23 @@ class FinanceAgentExecutor @Inject constructor(
             val marketContext = contextResponse.choices?.firstOrNull()?.message?.content
                 ?: return AgentExecutionResult.Failure("No response for market context analysis")
 
-            onProgress(0.55f, "Generating actionable insights…")
+            onProgress(0.60f, "Generating risk assessment…")
 
             // Step 2: Actionable insights and risk assessment
             val insightsResponse = api.chatCompletion(
                 ChatRequestDto(
                     model = Constants.DEFAULT_MODEL_ID,
                     messages = listOf(
-                        ChatMessageDto(
-                            role = "system",
-                            content = "You are a financial risk analyst. Be specific, data-oriented, and practical."
-                        ),
+                        ChatMessageDto(role = "system", content = systemPrompt),
                         ChatMessageDto(
                             role = "user",
-                            content = "Based on this analysis:\n$marketContext\n\n" +
+                            content = "Based on this market analysis:\n$marketContext\n\n" +
                                 "Provide: 1) Specific actionable insights, " +
-                                "2) Risk assessment (low/medium/high with reasoning), " +
+                                "2) Risk assessment (LOW / MEDIUM / HIGH) with data-backed reasoning, " +
                                 "3) Key indicators to monitor going forward, " +
-                                "4) Brief outlook for the next 7-30 days."
+                                "4) Short-term outlook (7–30 day horizon).\n\n" +
+                                "Remember: only reference prices and rates that appear in your data. " +
+                                "Include the required risk disclaimer."
                         )
                     ),
                     maxTokens = Constants.AGENT_MAX_TOKENS
@@ -83,7 +87,7 @@ class FinanceAgentExecutor @Inject constructor(
 
             val fullReport = "# Financial Monitor Report\n\n" +
                 "**Query:** ${task.prompt}\n\n" +
-                "## Market Context\n$marketContext\n\n" +
+                "## Market Context & Live Data\n$marketContext\n\n" +
                 "## Actionable Insights & Risk Assessment\n$insights"
 
             AgentExecutionResult.Success(fullReport)

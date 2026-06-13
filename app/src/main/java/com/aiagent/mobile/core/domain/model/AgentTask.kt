@@ -1,5 +1,7 @@
 package com.aiagent.mobile.core.domain.model
 
+import com.aiagent.mobile.core.domain.agent.AgentPriority
+
 data class AgentTask(
     val id: String,
     val title: String,
@@ -19,6 +21,7 @@ data class AgentTask(
     val retryCount: Int = 0,
     val maxRetries: Int = 3,
     val triggerType: TriggerType = TriggerType.MANUAL,
+    val priority: AgentPriority = AgentPriority.NORMAL,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

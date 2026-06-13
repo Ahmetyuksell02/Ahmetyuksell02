@@ -9,7 +9,7 @@ object Constants {
 
     // ─── Room Database ────────────────────────────────────────────────────────
     const val DATABASE_NAME = "ai_agent_db"
-    const val DATABASE_VERSION = 2
+    const val DATABASE_VERSION = 3
 
     // ─── WorkManager Tags ─────────────────────────────────────────────────────
     const val AGENT_TASK_WORKER_TAG = "agent_task_worker"
@@ -22,6 +22,7 @@ object Constants {
     const val KEY_ERROR = "error_message"
 
     // ─── Agent Execution ──────────────────────────────────────────────────────
+    const val MAX_CONCURRENT_AGENTS = 3
     const val MAX_AGENT_EXECUTION_MS = 8L * 60L * 1000L  // 8 minutes (WorkManager cap is ~10)
     const val MIN_PERIODIC_INTERVAL_MINUTES = 15L
     const val AGENT_BACKOFF_DELAY_SECONDS = 30L

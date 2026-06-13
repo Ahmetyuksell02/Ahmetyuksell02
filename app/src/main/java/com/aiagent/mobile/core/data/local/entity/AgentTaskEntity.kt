@@ -23,6 +23,7 @@ data class AgentTaskEntity(
     val retryCount: Int = 0,
     val maxRetries: Int = 3,
     val triggerType: String = "MANUAL",
+    val priority: String = "NORMAL",
     val createdAt: Long,
     val updatedAt: Long
 )

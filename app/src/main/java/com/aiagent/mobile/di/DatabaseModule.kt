@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.aiagent.mobile.core.common.Constants
 import com.aiagent.mobile.core.data.local.AppDatabase
+import com.aiagent.mobile.core.data.local.dao.AgentExecutionLogDao
 import com.aiagent.mobile.core.data.local.dao.AgentTaskDao
 import com.aiagent.mobile.core.data.local.dao.ConversationDao
 import com.aiagent.mobile.core.data.local.dao.MessageDao
@@ -37,4 +38,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAgentTaskDao(db: AppDatabase): AgentTaskDao = db.agentTaskDao()
+
+    @Provides
+    @Singleton
+    fun provideAgentExecutionLogDao(db: AppDatabase): AgentExecutionLogDao = db.agentExecutionLogDao()
 }
