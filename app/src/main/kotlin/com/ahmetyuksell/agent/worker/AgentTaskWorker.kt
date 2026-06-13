@@ -37,9 +37,25 @@ class AgentTaskWorker @AssistedInject constructor(
         val task = agentTaskRepository.getTask(taskId)
             ?: return Result.failure()
 
+        // Idempotency: WorkManager may retry; never re-execute terminal tasks
+        when (task.status) {
+            AgentTaskStatus.COMPLETED, AgentTaskStatus.CANCELLED -> {
+                Timber.w("AgentTaskWorker: task $taskId already ${task.status}, skipping")
+                return Result.success()
+            }
+            AgentTaskStatus.FAILED -> {
+                if (runAttemptCount >= 2) {
+                    Timber.w("AgentTaskWorker: task $taskId exceeded retry limit")
+                    return Result.failure()
+                }
+            }
+            else -> {}
+        }
+
         val agent = agentRepository.getAgent(task.agentId)
             ?: return Result.failure()
 
+        Timber.i("AgentTaskWorker: starting task $taskId (attempt $runAttemptCount)")
         agentTaskRepository.updateTaskStatus(taskId, AgentTaskStatus.RUNNING)
 
         setForeground(
@@ -82,19 +98,22 @@ class AgentTaskWorker @AssistedInject constructor(
 
                 is AgentResult.Failed -> {
                     agentTaskRepository.updateTaskError(taskId, result.error)
-                    Timber.e("Agent task $taskId failed: ${result.error}")
-                    if (runAttemptCount < 2) Result.retry() else Result.failure()
+                    Timber.e("AgentTaskWorker: task $taskId failed at attempt $runAttemptCount: ${result.error}")
+                    // Retry once for transient failures (network errors); the idempotency guard
+                    // at the top of doWork() prevents re-executing already-COMPLETED tasks on retry.
+                    if (runAttemptCount < 1) Result.retry() else Result.failure()
                 }
 
                 is AgentResult.Cancelled -> {
                     agentTaskRepository.cancelTask(taskId)
+                    Timber.i("AgentTaskWorker: task $taskId cancelled")
                     Result.success()
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Agent task $taskId threw exception")
+            Timber.e(e, "AgentTaskWorker: task $taskId threw exception at attempt $runAttemptCount")
             agentTaskRepository.updateTaskError(taskId, e.message ?: "Unknown error")
-            if (runAttemptCount < 2) Result.retry() else Result.failure()
+            if (runAttemptCount < 1) Result.retry() else Result.failure()
         }
     }
 

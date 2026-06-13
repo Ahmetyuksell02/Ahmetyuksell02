@@ -44,4 +44,14 @@ interface AgentTaskDao {
 
     @Query("UPDATE agent_tasks SET status = 'CANCELLED', completed_at = :completedAt WHERE id = :id")
     suspend fun cancelTask(id: String, completedAt: Long)
+
+    // Called once on boot to repair tasks that were RUNNING/PENDING when the app last crashed.
+    @Query("""
+        UPDATE agent_tasks
+        SET status = 'FAILED',
+            error_message = 'Task interrupted: app was terminated while this task was running',
+            completed_at = :now
+        WHERE status = 'RUNNING' OR status = 'PENDING'
+    """)
+    suspend fun resetOrphanedTasks(now: Long): Int
 }

@@ -1,14 +1,15 @@
 package com.ahmetyuksell.agent.domain.usecase.chat
 
 import com.ahmetyuksell.agent.domain.model.Message
-import com.ahmetyuksell.agent.domain.model.MessageRole
 import com.ahmetyuksell.agent.domain.model.StreamChunk
 import com.ahmetyuksell.agent.domain.repository.AiModelRepository
 import com.ahmetyuksell.agent.domain.repository.MessageRepository
 import com.ahmetyuksell.agent.data.remote.OpenRouterStreamingClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+import timber.log.Timber
 import javax.inject.Inject
 
 class StreamCompletionUseCase @Inject constructor(
@@ -34,8 +35,17 @@ class StreamCompletionUseCase @Inject constructor(
                 messageRepository.updateMessageContent(placeholderMessageId, buffer.toString())
             }
         }.onCompletion { cause ->
-            if (cause == null) {
-                messageRepository.setStreamingDone(placeholderMessageId)
+            // Always clear isStreaming=true regardless of how the stream ended.
+            // Without this, a cancellation or network failure would leave the message
+            // showing a perpetual "streaming" indicator across app restarts.
+            messageRepository.setStreamingDone(placeholderMessageId)
+
+            when {
+                cause == null -> {} // clean completion, no action needed
+                cause is CancellationException ->
+                    Timber.d("Stream cancelled for message $placeholderMessageId")
+                else ->
+                    Timber.e(cause, "Stream error for message $placeholderMessageId")
             }
         }
     }

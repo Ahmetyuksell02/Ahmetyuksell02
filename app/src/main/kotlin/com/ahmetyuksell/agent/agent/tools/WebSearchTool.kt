@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -43,7 +44,7 @@ class WebSearchTool @Inject constructor() : Tool {
             val query = json["query"]?.jsonPrimitive?.content
                 ?: return@withContext ToolResult.failure("Missing 'query' parameter")
 
-            val encodedQuery = query.replace(" ", "+")
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://api.duckduckgo.com/?q=$encodedQuery&format=json&no_html=1&skip_disambig=1"
 
             val request = Request.Builder().url(url).get()

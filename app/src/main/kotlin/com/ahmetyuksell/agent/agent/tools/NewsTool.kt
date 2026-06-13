@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -61,7 +62,7 @@ class NewsTool @Inject constructor() : Tool {
 
             val urlBuilder = StringBuilder("https://newsdata.io/api/1/news?apikey=pub_demo")
 
-            query?.let { urlBuilder.append("&q=${it.replace(" ", "+")}") }
+            query?.let { urlBuilder.append("&q=${URLEncoder.encode(it, "UTF-8")}") }
             category?.let { urlBuilder.append("&category=$it") }
             country?.let { urlBuilder.append("&country=$it") }
             urlBuilder.append("&language=en")

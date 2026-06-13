@@ -6,17 +6,15 @@ import com.ahmetyuksell.agent.security.SecureKeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-/**
- * Phase 5 — Real-world data: Weather via Open-Meteo (no API key required).
- * Uses free geocoding + forecast API.
- */
 class WeatherTool @Inject constructor(
     private val secureKeyStore: SecureKeyStore
 ) : Tool {
@@ -25,6 +23,8 @@ class WeatherTool @Inject constructor(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
+
+    private val lenientJson = Json { ignoreUnknownKeys = true }
 
     override val name = "get_weather"
     override val description = "Get current weather and 3-day forecast for any city worldwide. No API key needed."
@@ -77,7 +77,7 @@ class WeatherTool @Inject constructor(
             val weatherBody = weatherResponse.body?.string()
                 ?: return@withContext ToolResult.failure("Empty weather response")
 
-            val weatherJson = Json { ignoreUnknownKeys = true }.parseToJsonElement(weatherBody).jsonObject
+            val weatherJson = lenientJson.parseToJsonElement(weatherBody).jsonObject
             val current = weatherJson["current"]?.jsonObject
             val daily = weatherJson["daily"]?.jsonObject
 
@@ -86,10 +86,11 @@ class WeatherTool @Inject constructor(
             val humidity = current?.get("relative_humidity_2m")?.jsonPrimitive?.content ?: "N/A"
             val weatherCode = current?.get("weathercode")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
 
-            val maxTemps = daily?.get("temperature_2m_max")?.jsonObject
-                ?.values?.take(3)?.map { it.jsonPrimitive.content } ?: emptyList()
-            val minTemps = daily?.get("temperature_2m_min")?.jsonObject
-                ?.values?.take(3)?.map { it.jsonPrimitive.content } ?: emptyList()
+            // Open-Meteo returns daily arrays, not objects — access via jsonArray
+            val maxTemps = daily?.get("temperature_2m_max")?.jsonArray
+                ?.take(3)?.map { it.jsonPrimitive.content } ?: emptyList()
+            val minTemps = daily?.get("temperature_2m_min")?.jsonArray
+                ?.take(3)?.map { it.jsonPrimitive.content } ?: emptyList()
 
             val result = buildString {
                 appendLine("Weather for $displayName:")
@@ -113,19 +114,21 @@ class WeatherTool @Inject constructor(
 
     private fun geocodeCity(city: String): Triple<Double, Double, String>? {
         return try {
-            val url = "https://geocoding-api.open-meteo.com/v1/search?name=${city.replace(" ", "+")}&count=1&language=en&format=json"
+            val encoded = URLEncoder.encode(city, "UTF-8")
+            val url = "https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=1&language=en&format=json"
             val request = Request.Builder().url(url).get().build()
             val response = client.newCall(request).execute()
 
             val body = response.body?.string() ?: return null
-            val json = Json { ignoreUnknownKeys = true }.parseToJsonElement(body).jsonObject
-            val results = json["results"]?.jsonObject?.values?.firstOrNull()?.jsonObject
-                ?: return null
+            val json = lenientJson.parseToJsonElement(body).jsonObject
 
-            val lat = results["latitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return null
-            val lon = results["longitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return null
-            val name = results["name"]?.jsonPrimitive?.content ?: city
-            val country = results["country"]?.jsonPrimitive?.content ?: ""
+            // Open-Meteo geocoding returns "results" as a JSON array, not an object
+            val firstResult = json["results"]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
+
+            val lat = firstResult["latitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return null
+            val lon = firstResult["longitude"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return null
+            val name = firstResult["name"]?.jsonPrimitive?.content ?: city
+            val country = firstResult["country"]?.jsonPrimitive?.content ?: ""
 
             Triple(lat, lon, "$name, $country")
         } catch (e: Exception) {

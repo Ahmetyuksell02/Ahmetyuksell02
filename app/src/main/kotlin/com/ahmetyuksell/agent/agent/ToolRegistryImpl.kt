@@ -3,6 +3,8 @@ package com.ahmetyuksell.agent.agent
 import com.ahmetyuksell.agent.domain.agent.Tool
 import com.ahmetyuksell.agent.domain.agent.ToolRegistry
 import com.ahmetyuksell.agent.domain.agent.ToolResult
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,16 +25,26 @@ class ToolRegistryImpl @Inject constructor(
     }
 
     override suspend fun execute(name: String, argsJson: String): ToolResult {
+        if (argsJson.length > MAX_ARGS_CHARS) {
+            return ToolResult.failure(
+                "Tool '$name' args too large: ${argsJson.length} chars (max $MAX_ARGS_CHARS). " +
+                        "The LLM produced an oversized argument payload."
+            )
+        }
+
         val tool = toolMap[name]
             ?: return ToolResult.failure("Unknown tool: '$name'. Available: ${toolMap.keys.joinToString()}")
 
         return try {
-            val result = tool.execute(argsJson)
+            val result = withTimeout(TOOL_TIMEOUT_MS) { tool.execute(argsJson) }
             if (result.result.length > MAX_RESULT_CHARS) {
                 result.copy(result = result.result.take(MAX_RESULT_CHARS) + "\n[truncated]")
             } else {
                 result
             }
+        } catch (e: TimeoutCancellationException) {
+            Timber.e("Tool '$name' timed out after ${TOOL_TIMEOUT_MS / 1000}s")
+            ToolResult.failure("Tool '$name' timed out after ${TOOL_TIMEOUT_MS / 1000}s")
         } catch (e: Exception) {
             Timber.e(e, "Tool '$name' threw exception")
             ToolResult.failure("Tool execution error: ${e.message}")
@@ -50,5 +62,7 @@ class ToolRegistryImpl @Inject constructor(
 
     companion object {
         private const val MAX_RESULT_CHARS = 4000
+        private const val MAX_ARGS_CHARS = 8_000
+        private const val TOOL_TIMEOUT_MS = 30_000L
     }
 }

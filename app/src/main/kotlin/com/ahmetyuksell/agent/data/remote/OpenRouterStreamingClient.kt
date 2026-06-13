@@ -21,6 +21,8 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +31,16 @@ class OpenRouterStreamingClient @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val json: Json
 ) {
-    private val activeSources = mutableMapOf<String, EventSource>()
+    // ConcurrentHashMap: stream() and cancelStream() may be called from different threads
+    private val activeSources = ConcurrentHashMap<String, EventSource>()
+
+    // Derived client with a 3-minute call-level timeout; inherits connect/read from shared client.
+    // A separate instance is required so we don't mutate the shared OkHttpClient.
+    private val streamingClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .callTimeout(180, TimeUnit.SECONDS)
+            .build()
+    }
 
     fun stream(
         messages: List<Message>,
@@ -69,12 +80,16 @@ class OpenRouterStreamingClient @Inject constructor(
                     val chunkDto = json.decodeFromString<StreamChunkDto>(data)
                     trySend(chunkDto.toStreamChunk())
                 } catch (e: Exception) {
-                    Timber.w("Failed to parse SSE chunk: ${data.take(200)}")
+                    // Partial or malformed SSE line — skip rather than closing the stream.
+                    // OpenRouter may emit keep-alive comments or split delta lines.
+                    Timber.w("Failed to parse SSE chunk (${data.length}B): ${data.take(100)}")
                 }
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                channel.close(t ?: Exception("SSE stream failed: ${response?.code}"))
+                val code = response?.code
+                Timber.e(t, "SSE stream failure: HTTP $code streamId=$streamId")
+                channel.close(t ?: Exception("SSE stream failed: $code"))
             }
 
             override fun onClosed(eventSource: EventSource) {
@@ -82,18 +97,20 @@ class OpenRouterStreamingClient @Inject constructor(
             }
         }
 
-        val eventSource = EventSources.createFactory(okHttpClient).newEventSource(request, listener)
+        val eventSource = EventSources.createFactory(streamingClient)
+            .newEventSource(request, listener)
         activeSources[streamId] = eventSource
+        Timber.d("SSE stream started: streamId=$streamId")
 
         awaitClose {
             eventSource.cancel()
             activeSources.remove(streamId)
+            Timber.d("SSE stream closed: streamId=$streamId")
         }
     }
 
     fun cancelStream(streamId: String) {
-        activeSources[streamId]?.cancel()
-        activeSources.remove(streamId)
+        activeSources.remove(streamId)?.cancel()
     }
 
     private fun Message.toDto(): MessageDto {

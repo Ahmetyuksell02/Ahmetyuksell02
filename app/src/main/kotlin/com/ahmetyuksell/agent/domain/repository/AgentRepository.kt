@@ -24,4 +24,6 @@ interface AgentTaskRepository {
     suspend fun updateTaskResult(id: String, result: String, steps: String)
     suspend fun updateTaskError(id: String, error: String)
     suspend fun cancelTask(id: String)
+    // Returns the number of tasks repaired (should be 0 in normal operation)
+    suspend fun resetOrphanedRunningTasks(): Int
 }

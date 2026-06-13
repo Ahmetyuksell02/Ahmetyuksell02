@@ -43,17 +43,29 @@ class CalculatorTool @Inject constructor() : Tool {
     }
 
     private fun sanitize(expression: String): String? {
-        val allowed = Regex("^[0-9+\\-*/().,%^\\s]+$")
-        val withMath = expression
+        val numericOnlyPattern = Regex("^[0-9+\\-*/().,%^\\s]+$")
+        val knownMathFunctions = Regex("\\b(sqrt|abs|floor|ceil|round)\\b")
+
+        val isNumericOnly = numericOnlyPattern.matches(expression)
+        val hasMathFunctions = knownMathFunctions.containsMatchIn(expression)
+
+        // Reject expressions containing anything other than numbers, operators,
+        // parentheses, or the allowed math function names
+        if (!isNumericOnly && !hasMathFunctions) return null
+
+        // If math functions are present, verify the non-function portion is still numeric-only
+        if (hasMathFunctions) {
+            val strippedFunctions = expression.replace(knownMathFunctions, "")
+            if (!numericOnlyPattern.matches(strippedFunctions.replace(Regex("[()]"), ""))) return null
+        }
+
+        return expression
             .replace("sqrt", "Math.sqrt")
             .replace("abs", "Math.abs")
             .replace("floor", "Math.floor")
             .replace("ceil", "Math.ceil")
             .replace("round", "Math.round")
             .replace("^", "**")
-
-        return if (expression.replace(Regex("[a-zA-Z_]"), "").let { allowed.matches(expression) }
-            || withMath.contains("Math.")) withMath else null
     }
 
     private fun evaluateExpression(expression: String): String {

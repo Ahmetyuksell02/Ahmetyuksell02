@@ -80,4 +80,8 @@ class AgentTaskRepositoryImpl @Inject constructor(
     override suspend fun cancelTask(id: String) {
         dao.cancelTask(id, System.currentTimeMillis())
     }
+
+    override suspend fun resetOrphanedRunningTasks(): Int {
+        return dao.resetOrphanedTasks(System.currentTimeMillis())
+    }
 }
